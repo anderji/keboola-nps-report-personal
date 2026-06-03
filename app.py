@@ -48,7 +48,7 @@ def load_data():
                     result.append(row)
                 elif isinstance(row, list):
                     # rows are arrays — zip with columns
-                    result.append({col: (row[i] if i < len(row) else None) for i, col in enumerate(columns)})
+                    result.append({item["columnName"]: item["value"] for item in row})
                 else:
                     logger.warning(f"Unexpected row type: {type(row)}")
 
