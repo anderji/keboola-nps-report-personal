@@ -704,7 +704,7 @@ async function fetchData() {
         else if (d._score <= 8) d._cat = 'passive';
         else d._cat = 'promoter';
       } else {
-        d._cat = (d.nps_category || '').toLowerCase();
+        d._cat = String(d.nps_category || '').toLowerCase();
       }
     });
     populateFilters();
