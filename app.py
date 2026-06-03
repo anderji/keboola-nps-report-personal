@@ -7,7 +7,7 @@ from flask import Flask, jsonify, send_from_directory, request
 
 app = Flask(__name__)
 
-KBC_TOKEN = os.environ.get("KBC_TOKEN", "")
+KBC_TOKEN = os.environ.get("STORAGE_TOKEN", "")
 KBC_URL = os.environ.get("KBC_URL", "https://connection.europe-west3.gcp.keboola.com")
 TABLE_ID = "in.c-dataaps-test.nps_text_feedback"
 
