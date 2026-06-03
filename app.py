@@ -28,16 +28,31 @@ def load_data():
     headers = {"X-StorageApi-Token": KBC_TOKEN}
     url = f"{KBC_URL.rstrip('/')}/v2/storage/tables/{TABLE_ID}/data-preview"
 
-    # JSON format, max 1000 rows (no offset supported)
+    # Try JSON format
     try:
-        logger.info(f"Fetching data-preview (JSON, limit=1000)...")
+        logger.info("Fetching data-preview (JSON, limit=1000)...")
         resp = requests.get(url, headers=headers, params={"format": "json", "limit": 1000}, timeout=60)
         logger.info(f"Status: {resp.status_code}")
         if resp.status_code == 200:
             payload = resp.json()
             columns = payload.get("columns", [])
             rows    = payload.get("rows", [])
-            _data_cache = [{col: (row[i] if i < len(row) else None) for i, col in enumerate(columns)} for row in rows]
+            logger.info(f"Columns: {columns}")
+            logger.info(f"First row type: {type(rows[0]) if rows else 'no rows'}")
+            logger.info(f"First row sample: {str(rows[0])[:200] if rows else 'none'}")
+
+            result = []
+            for row in rows:
+                if isinstance(row, dict):
+                    # rows are already key-value objects
+                    result.append(row)
+                elif isinstance(row, list):
+                    # rows are arrays — zip with columns
+                    result.append({col: (row[i] if i < len(row) else None) for i, col in enumerate(columns)})
+                else:
+                    logger.warning(f"Unexpected row type: {type(row)}")
+
+            _data_cache = result
             logger.info(f"Loaded {len(_data_cache)} rows")
             return True
         logger.error(f"JSON failed: {resp.text[:300]}")
