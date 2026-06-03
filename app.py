@@ -10,58 +10,55 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# Keboola injects #STORAGE_TOKEN as STORAGE_TOKEN env var
-KBC_TOKEN = os.environ.get("STORAGE_TOKEN", "")
+KBC_TOKEN = os.environ.get("KBC_TOKEN", "") or os.environ.get("STORAGE_TOKEN", "")
 KBC_URL   = os.environ.get("KBC_URL", "https://connection.europe-west3.gcp.keboola.com")
 TABLE_ID  = "in.c-dataaps-test.nps_text_feedback"
 
 logger.info(f"KBC_URL: {KBC_URL}")
-logger.info(f"STORAGE_TOKEN present: {'Yes' if KBC_TOKEN else 'No'}")
+logger.info(f"KBC_TOKEN present: {'Yes' if KBC_TOKEN else 'No'}")
 
 _data_cache = []
 
 def load_data():
     global _data_cache
     if not KBC_TOKEN:
-        logger.error("STORAGE_TOKEN is empty — cannot load data")
+        logger.error("No token available")
         return False
 
-    url = f"{KBC_URL.rstrip('/')}/v2/storage/tables/{TABLE_ID}/data-preview"
     headers = {"X-StorageApi-Token": KBC_TOKEN}
+    all_rows = []
+    offset = 0
+    limit = 1000
 
-    # Try JSON format first
-    try:
-        logger.info(f"Fetching: {url}")
-        resp = requests.get(url, headers=headers, params={"format": "json", "limit": 10000}, timeout=60)
-        logger.info(f"Response status: {resp.status_code}")
-        if resp.status_code == 200:
+    while True:
+        url = f"{KBC_URL.rstrip('/')}/v2/storage/tables/{TABLE_ID}/data-preview"
+        params = {"format": "json", "limit": limit, "offset": offset}
+        try:
+            logger.info(f"Fetching rows {offset}–{offset+limit}...")
+            resp = requests.get(url, headers=headers, params=params, timeout=60)
+            logger.info(f"Status: {resp.status_code}")
+            if resp.status_code != 200:
+                logger.error(f"Failed: {resp.text[:300]}")
+                break
             payload = resp.json()
             columns = payload.get("columns", [])
             rows    = payload.get("rows", [])
-            _data_cache = [{col: (row[i] if i < len(row) else None) for i, col in enumerate(columns)} for row in rows]
-            logger.info(f"Loaded {len(_data_cache)} rows (JSON)")
-            return True
-        else:
-            logger.error(f"JSON preview failed: {resp.status_code} — {resp.text[:300]}")
-    except Exception as e:
-        logger.error(f"JSON fetch error: {e}")
+            if not rows:
+                logger.info("No more rows, done.")
+                break
+            for row in rows:
+                all_rows.append({col: (row[i] if i < len(row) else None) for i, col in enumerate(columns)})
+            logger.info(f"Got {len(rows)} rows, total so far: {len(all_rows)}")
+            if len(rows) < limit:
+                break
+            offset += limit
+        except Exception as e:
+            logger.error(f"Fetch error: {e}")
+            break
 
-    # Fallback: CSV format
-    try:
-        logger.info("Trying CSV fallback...")
-        resp2 = requests.get(url, headers=headers, params={"format": "rfc", "limit": 10000}, timeout=60)
-        logger.info(f"CSV response status: {resp2.status_code}")
-        if resp2.status_code == 200:
-            reader = csv.DictReader(io.StringIO(resp2.text))
-            _data_cache = list(reader)
-            logger.info(f"Loaded {len(_data_cache)} rows (CSV)")
-            return True
-        else:
-            logger.error(f"CSV preview failed: {resp2.status_code} — {resp2.text[:300]}")
-    except Exception as e2:
-        logger.error(f"CSV fetch error: {e2}")
-
-    return False
+    _data_cache = all_rows
+    logger.info(f"Total loaded: {len(_data_cache)} rows")
+    return len(_data_cache) > 0
 
 load_data()
 
@@ -79,11 +76,11 @@ def debug():
                 for k, v in os.environ.items()
                 if any(x in k.upper() for x in ["TOKEN","KBC","STORAGE","WORKSPACE","BRANCH"])}
     return jsonify({
-        "row_count":    len(_data_cache),
+        "row_count":     len(_data_cache),
         "token_present": bool(KBC_TOKEN),
-        "kbc_url":      KBC_URL,
-        "env_vars":     env_info,
-        "sample_row":   _data_cache[0] if _data_cache else None,
+        "kbc_url":       KBC_URL,
+        "env_vars":      env_info,
+        "sample_row":    _data_cache[0] if _data_cache else None,
     })
 
 @app.route("/api/reload", methods=["POST"])
