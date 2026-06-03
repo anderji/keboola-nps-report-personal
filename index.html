@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>NPS Text Feedback Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #06101d;
+    --bg2: #0d1e30;
+    --bg3: #112236;
+    --border: rgba(255,255,255,0.07);
+    --card-shadow: 0 2px 16px rgba(0,0,0,0.5);
+    --green: #22c55e;
+    --green-dim: rgba(34,197,94,0.15);
+    --amber: #f59e0b;
+    --amber-dim: rgba(245,158,11,0.15);
+    --red: #ef4444;
+    --red-dim: rgba(239,68,68,0.15);
+    --blue: #3b82f6;
+    --text: #e2e8f0;
+    --text-muted: #64748b;
+    --text-dim: #94a3b8;
+    --accent: #38bdf8;
+    --sidebar-w: 240px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    display: flex;
+    min-height: 100vh;
+  }
+
+  /* ── SIDEBAR ── */
+  #sidebar {
+    width: var(--sidebar-w);
+    min-width: var(--sidebar-w);
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    padding: 20px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    z-index: 10;
+  }
+
+  .sidebar-logo {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.02em;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .sidebar-logo svg { flex-shrink: 0; }
+
+  .filter-section { display: flex; flex-direction: column; gap: 8px; }
+
+  .filter-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+  }
+
+  select, input[type="date"] {
+    width: 100%;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 7px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    outline: none;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+
+  select:hover, input[type="date"]:hover {
+    border-color: rgba(255,255,255,0.18);
+  }
+
+  select:focus, input[type="date"]:focus {
+    border-color: var(--accent);
+  }
+
+  .date-row { display: flex; flex-direction: column; gap: 6px; }
+  .date-row label { font-size: 11px; color: var(--text-dim); }
+
+  .btn-reset {
+    margin-top: 4px;
+    background: rgba(56,189,248,0.1);
+    border: 1px solid rgba(56,189,248,0.25);
+    color: var(--accent);
+    padding: 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    width: 100%;
+    transition: background 0.15s;
+  }
+  .btn-reset:hover { background: rgba(56,189,248,0.2); }
+
+  #filter-count {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: center;
+    padding-top: 4px;
+  }
+
+  /* ── MAIN ── */
+  #main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+
+  .page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 4px;
+  }
+
+  .page-title { font-size: 20px; font-weight: 700; color: var(--text); }
+  .page-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+  .section-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── CARDS ── */
+  .cards-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 14px;
+  }
+
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    box-shadow: var(--card-shadow);
+  }
+
+  .card-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+
+  .card-value {
+    font-size: 32px;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--text);
+  }
+
+  .card-value.green { color: var(--green); }
+  .card-value.amber { color: var(--amber); }
+  .card-value.red { color: var(--red); }
+  .card-value.blue { color: var(--accent); }
+
+  .card-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 5px;
+  }
+
+  .hero-card {
+    background: linear-gradient(135deg, #0d2640 0%, #0a1e30 100%);
+    border-color: rgba(56,189,248,0.2);
+  }
+
+  /* ── MOM SECTION ── */
+  .mom-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.6fr;
+    gap: 16px;
+    align-items: start;
+  }
+
+  .delta-cards { display: flex; flex-direction: column; gap: 10px; }
+
+  .delta-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+
+  .delta-card .dc-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .delta-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .delta-val { font-size: 22px; font-weight: 800; }
+  .delta-pct { font-size: 12px; font-weight: 600; padding: 2px 7px; border-radius: 4px; }
+
+  .up   { color: var(--green); }
+  .down { color: var(--red); }
+  .flat { color: var(--text-muted); }
+
+  .up-bg   { background: var(--green-dim); color: var(--green); }
+  .down-bg { background: var(--red-dim); color: var(--red); }
+  .flat-bg { background: rgba(100,116,139,0.15); color: var(--text-muted); }
+
+  /* ── CHARTS ── */
+  .chart-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: var(--card-shadow);
+  }
+
+  .chart-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 16px;
+  }
+
+  .chart-wrap { position: relative; }
+
+  /* ── YTD ── */
+  .ytd-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .ytd-legend { display: flex; flex-direction: column; gap: 10px; justify-content: center; }
+
+  .legend-item { display: flex; align-items: center; gap: 10px; }
+
+  .legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .legend-label { font-size: 12px; color: var(--text-dim); }
+  .legend-val { font-size: 14px; font-weight: 700; margin-left: auto; }
+
+  /* ── TRENDS TABLE ── */
+  .table-wrap {
+    overflow-x: auto;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--bg2);
+  }
+
+  thead th {
+    background: var(--bg3);
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    white-space: nowrap;
+    border-bottom: 1px solid var(--border);
+  }
+
+  tbody tr { border-bottom: 1px solid var(--border); }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: rgba(255,255,255,0.02); }
+
+  tbody td {
+    padding: 10px 14px;
+    font-size: 13px;
+    color: var(--text);
+    white-space: nowrap;
+  }
+
+  .score-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .score-green { background: var(--green-dim); color: var(--green); }
+  .score-amber { background: var(--amber-dim); color: var(--amber); }
+  .score-red   { background: var(--red-dim);   color: var(--red); }
+
+  .nps-positive { color: var(--green); font-weight: 700; }
+  .nps-negative { color: var(--red);   font-weight: 700; }
+  .nps-neutral  { color: var(--amber); font-weight: 700; }
+
+  /* ── TOPICS ── */
+  .topic-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .topic-item {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .topic-header {
+    padding: 14px 16px;
+    cursor: pointer;
+    display: grid;
+    grid-template-columns: 1fr auto auto auto auto auto;
+    gap: 12px;
+    align-items: center;
+    user-select: none;
+    transition: background 0.1s;
+  }
+
+  .topic-header:hover { background: rgba(255,255,255,0.02); }
+
+  .topic-name { font-weight: 600; font-size: 13px; }
+  .topic-count { font-size: 12px; color: var(--text-muted); }
+
+  .sentiment-bar {
+    display: flex;
+    height: 6px;
+    border-radius: 3px;
+    overflow: hidden;
+    width: 80px;
+    gap: 1px;
+  }
+
+  .s-neg { background: var(--red); }
+  .s-neu { background: var(--text-muted); }
+  .s-pos { background: var(--green); }
+
+  .mom-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+
+  .chevron { color: var(--text-muted); font-size: 12px; transition: transform 0.2s; }
+  .chevron.open { transform: rotate(90deg); }
+
+  .topic-rows { display: none; border-top: 1px solid var(--border); }
+  .topic-rows.open { display: block; }
+
+  .feedback-row {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: 90px 80px 80px 80px 50px 1fr;
+    gap: 10px;
+    align-items: start;
+    font-size: 12px;
+  }
+
+  .feedback-row:last-child { border-bottom: none; }
+  .feedback-row:hover { background: rgba(255,255,255,0.015); }
+
+  .feedback-meta { color: var(--text-muted); }
+  .feedback-text { color: var(--text-dim); line-height: 1.5; white-space: normal; word-break: break-word; }
+
+  /* ── DRILL DOWN ── */
+  #search-input {
+    width: 100%;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 9px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    outline: none;
+    margin-bottom: 14px;
+  }
+  #search-input:focus { border-color: var(--accent); }
+
+  .drill-text { white-space: normal; word-break: break-word; max-width: 320px; }
+
+  /* ── LOADING ── */
+  #loading {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    z-index: 100;
+  }
+
+  .spinner {
+    width: 40px; height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #loading p { color: var(--text-muted); font-size: 13px; }
+
+  .error-msg {
+    background: var(--red-dim);
+    border: 1px solid rgba(239,68,68,0.3);
+    color: var(--red);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    margin-bottom: 14px;
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="spinner"></div>
+  <p>Loading NPS data…</p>
+</div>
+
+<!-- SIDEBAR -->
+<nav id="sidebar">
+  <div class="sidebar-logo">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+    </svg>
+    NPS Dashboard
+  </div>
+
+  <div class="filter-section">
+    <div class="filter-label">Source</div>
+    <select id="f-source"><option value="">All Sources</option></select>
+  </div>
+
+  <div class="filter-section">
+    <div class="filter-label">Internal Project</div>
+    <select id="f-project"><option value="">All Projects</option></select>
+  </div>
+
+  <div class="filter-section">
+    <div class="filter-label">Tariff</div>
+    <select id="f-tariff"><option value="">All Tariffs</option></select>
+  </div>
+
+  <div class="filter-section">
+    <div class="filter-label">Segment</div>
+    <select id="f-segment"><option value="">All Segments</option></select>
+  </div>
+
+  <div class="filter-section">
+    <div class="filter-label">Month</div>
+    <select id="f-month"><option value="">All Months</option></select>
+  </div>
+
+  <div class="filter-section">
+    <div class="filter-label">Date Range</div>
+    <div class="date-row">
+      <label>From</label>
+      <input type="date" id="f-date-from"/>
+    </div>
+    <div class="date-row">
+      <label>To</label>
+      <input type="date" id="f-date-to"/>
+    </div>
+  </div>
+
+  <button class="btn-reset" onclick="resetFilters()">Reset Filters</button>
+  <div id="filter-count">— rows</div>
+</nav>
+
+<!-- MAIN CONTENT -->
+<main id="main" style="display:none;">
+
+  <div class="page-header">
+    <div>
+      <div class="page-title">NPS Feedback Report</div>
+      <div class="page-sub" id="data-range">—</div>
+    </div>
+  </div>
+
+  <div id="error-msg" class="error-msg"></div>
+
+  <!-- Section 1: Overview -->
+  <section>
+    <div class="section-title">Overview</div>
+    <div class="cards-row">
+      <div class="card hero-card">
+        <div class="card-label">NPS Score</div>
+        <div class="card-value blue" id="nps-score">—</div>
+        <div class="card-sub">Net Promoter Score</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Total Responses</div>
+        <div class="card-value" id="total-resp">—</div>
+        <div class="card-sub">filtered</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Avg Score</div>
+        <div class="card-value" id="avg-score">—</div>
+        <div class="card-sub">out of 10</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Text Feedback</div>
+        <div class="card-value" id="text-rate">—</div>
+        <div class="card-sub">with feedback text</div>
+      </div>
+      <div class="card">
+        <div class="card-label">YTD NPS</div>
+        <div class="card-value blue" id="ytd-nps">—</div>
+        <div class="card-sub">current year</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 2: Month-over-Month -->
+  <section>
+    <div class="section-title">Month-over-Month</div>
+    <div class="mom-grid">
+      <div class="delta-cards">
+        <div class="delta-card">
+          <div class="dc-label">NPS Points</div>
+          <div class="delta-row">
+            <span class="delta-val" id="mom-nps">—</span>
+            <span class="delta-pct" id="mom-nps-pct">—</span>
+          </div>
+          <div class="card-sub" id="mom-nps-sub">vs previous month</div>
+        </div>
+        <div class="delta-card">
+          <div class="dc-label">Responses</div>
+          <div class="delta-row">
+            <span class="delta-val" id="mom-resp">—</span>
+            <span class="delta-pct" id="mom-resp-pct">—</span>
+          </div>
+        </div>
+        <div class="delta-card">
+          <div class="dc-label" style="margin-bottom:10px;">Segment Split</div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;">
+            <div>
+              <div class="card-sub">Promoters</div>
+              <div style="font-size:16px;font-weight:700;color:var(--green)" id="mom-prom">—</div>
+            </div>
+            <div>
+              <div class="card-sub">Passives</div>
+              <div style="font-size:16px;font-weight:700;color:var(--amber)" id="mom-pass">—</div>
+            </div>
+            <div>
+              <div class="card-sub">Detractors</div>
+              <div style="font-size:16px;font-weight:700;color:var(--red)" id="mom-detr">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Last 6 Months — Promoter / Passive / Detractor</div>
+        <div class="chart-wrap" style="height:200px;">
+          <canvas id="chart-stacked"></canvas>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 3: YTD -->
+  <section>
+    <div class="section-title">Year-to-Date</div>
+    <div class="chart-card">
+      <div class="chart-title">YTD Promoters / Passives / Detractors</div>
+      <div class="ytd-grid">
+        <div class="chart-wrap" style="height:200px;">
+          <canvas id="chart-donut"></canvas>
+        </div>
+        <div class="ytd-legend" id="ytd-legend"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 4: Trends -->
+  <section>
+    <div class="section-title">Monthly Trends</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Month</th>
+            <th>Responses</th>
+            <th>NPS</th>
+            <th>Detractors</th>
+            <th>Passives</th>
+            <th>Promoters</th>
+          </tr>
+        </thead>
+        <tbody id="trends-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Section 5: Topics -->
+  <section>
+    <div class="section-title">Topics</div>
+    <div class="topic-list" id="topics-list"></div>
+  </section>
+
+  <!-- Section 6: Drill-down -->
+  <section>
+    <div class="section-title">Drill-down</div>
+    <input type="text" id="search-input" placeholder="Search feedback text, project, segment…" oninput="renderDrilldown()"/>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Cohort Date</th>
+            <th>Eval Date</th>
+            <th>Project ID</th>
+            <th>Tariff</th>
+            <th>Segment</th>
+            <th>Score</th>
+            <th>Source</th>
+            <th>Feedback</th>
+          </tr>
+        </thead>
+        <tbody id="drill-body"></tbody>
+      </table>
+    </div>
+    <div id="drill-count" style="font-size:12px;color:var(--text-muted);margin-top:8px;"></div>
+  </section>
+
+</main>
+
+<script>
+let RAW = [];
+let FILTERED = [];
+let charts = {};
+
+// ── FETCH DATA ──────────────────────────────────────────────────────────
+async function fetchData() {
+  try {
+    const r = await fetch('/api/data');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    RAW = await r.json();
+    // Normalise numeric score
+    RAW.forEach(d => {
+      d._score = parseInt(d.score, 10);
+      if (isNaN(d._score)) d._score = null;
+      // derived category
+      if (d._score !== null) {
+        if (d._score <= 6) d._cat = 'detractor';
+        else if (d._score <= 8) d._cat = 'passive';
+        else d._cat = 'promoter';
+      } else {
+        d._cat = (d.nps_category || '').toLowerCase();
+      }
+    });
+    populateFilters();
+    applyFilters();
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('main').style.display = 'block';
+  } catch (e) {
+    document.getElementById('loading').innerHTML = `
+      <div style="color:var(--red);font-size:14px;">Failed to load data: ${e.message}</div>
+      <button onclick="location.reload()" style="margin-top:12px;padding:8px 16px;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer;">Retry</button>`;
+  }
+}
+
+// ── FILTERS ─────────────────────────────────────────────────────────────
+function unique(arr, key) {
+  return [...new Set(arr.map(d => d[key]).filter(Boolean))].sort();
+}
+
+function populateFilters() {
+  const fill = (id, vals) => {
+    const sel = document.getElementById(id);
+    const cur = sel.value;
+    while (sel.options.length > 1) sel.remove(1);
+    vals.forEach(v => {
+      const o = document.createElement('option');
+      o.value = v; o.textContent = v;
+      sel.appendChild(o);
+    });
+    if (cur) sel.value = cur;
+  };
+  fill('f-source', unique(RAW, 'source'));
+  fill('f-project', unique(RAW, 'internal_project'));
+  fill('f-tariff', unique(RAW, 'tariff'));
+  fill('f-segment', unique(RAW, 'segment'));
+  fill('f-month', unique(RAW, 'month'));
+}
+
+function getFilters() {
+  return {
+    source: document.getElementById('f-source').value,
+    project: document.getElementById('f-project').value,
+    tariff: document.getElementById('f-tariff').value,
+    segment: document.getElementById('f-segment').value,
+    month: document.getElementById('f-month').value,
+    dateFrom: document.getElementById('f-date-from').value,
+    dateTo: document.getElementById('f-date-to').value,
+  };
+}
+
+function applyFilters() {
+  const f = getFilters();
+  FILTERED = RAW.filter(d => {
+    if (f.source && d.source !== f.source) return false;
+    if (f.project && d.internal_project !== f.project) return false;
+    if (f.tariff && d.tariff !== f.tariff) return false;
+    if (f.segment && d.segment !== f.segment) return false;
+    if (f.month && d.month !== f.month) return false;
+    if (f.dateFrom && d.response_date && d.response_date < f.dateFrom) return false;
+    if (f.dateTo && d.response_date && d.response_date > f.dateTo) return false;
+    return true;
+  });
+  document.getElementById('filter-count').textContent = `${FILTERED.length} rows`;
+  render();
+}
+
+function resetFilters() {
+  ['f-source','f-project','f-tariff','f-segment','f-month'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('f-date-from').value = '';
+  document.getElementById('f-date-to').value = '';
+  applyFilters();
+}
+
+// ── NPS CALC ─────────────────────────────────────────────────────────────
+function calcNPS(rows) {
+  const total = rows.length;
+  if (!total) return { nps: null, promoters: 0, passives: 0, detractors: 0, total: 0 };
+  const promoters = rows.filter(d => d._cat === 'promoter').length;
+  const passives = rows.filter(d => d._cat === 'passive').length;
+  const detractors = rows.filter(d => d._cat === 'detractor').length;
+  const nps = Math.round(((promoters - detractors) / total) * 100);
+  return { nps, promoters, passives, detractors, total };
+}
+
+function fmtNPS(v) {
+  if (v === null || v === undefined) return '—';
+  return (v >= 0 ? '+' : '') + v;
+}
+
+function npsClass(v) {
+  if (v === null) return '';
+  if (v >= 30) return 'nps-positive';
+  if (v >= 0) return 'nps-neutral';
+  return 'nps-negative';
+}
+
+// ── RENDER ───────────────────────────────────────────────────────────────
+function render() {
+  renderOverview();
+  renderMoM();
+  renderYTD();
+  renderTrends();
+  renderTopics();
+  renderDrilldown();
+}
+
+function renderOverview() {
+  const s = calcNPS(FILTERED);
+  const scoreEl = document.getElementById('nps-score');
+  scoreEl.textContent = s.nps !== null ? fmtNPS(s.nps) : '—';
+  scoreEl.className = 'card-value blue';
+
+  document.getElementById('total-resp').textContent = s.total;
+
+  const scores = FILTERED.map(d => d._score).filter(v => v !== null);
+  const avg = scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1) : '—';
+  document.getElementById('avg-score').textContent = avg;
+
+  const withText = FILTERED.filter(d => d.feedback_text && d.feedback_text.trim().length > 1).length;
+  const rate = s.total ? Math.round((withText / s.total) * 100) + '%' : '—';
+  document.getElementById('text-rate').textContent = rate;
+
+  // YTD
+  const thisYear = new Date().getFullYear().toString();
+  const ytdRows = FILTERED.filter(d => d.response_date && d.response_date.startsWith(thisYear));
+  const ytd = calcNPS(ytdRows);
+  document.getElementById('ytd-nps').textContent = ytd.nps !== null ? fmtNPS(ytd.nps) : '—';
+
+  // Date range sub
+  const dates = FILTERED.map(d=>d.response_date).filter(Boolean).sort();
+  if (dates.length) {
+    document.getElementById('data-range').textContent = `${dates[0]} → ${dates[dates.length-1]}`;
+  }
+}
+
+function getMonthlyData() {
+  const map = {};
+  FILTERED.forEach(d => {
+    const m = d.month || '';
+    if (!m) return;
+    if (!map[m]) map[m] = [];
+    map[m].push(d);
+  });
+  const months = Object.keys(map).sort();
+  return { map, months };
+}
+
+function renderMoM() {
+  const { map, months } = getMonthlyData();
+  if (months.length < 1) {
+    ['mom-nps','mom-resp','mom-prom','mom-pass','mom-detr'].forEach(id => {
+      document.getElementById(id).textContent = '—';
+    });
+    return;
+  }
+
+  const curM = months[months.length - 1];
+  const prevM = months.length >= 2 ? months[months.length - 2] : null;
+  const cur = calcNPS(map[curM]);
+  const prev = prevM ? calcNPS(map[prevM]) : null;
+
+  // NPS delta
+  const npsDelta = prev && prev.nps !== null && cur.nps !== null ? cur.nps - prev.nps : null;
+  const npsEl = document.getElementById('mom-nps');
+  npsEl.textContent = cur.nps !== null ? fmtNPS(cur.nps) : '—';
+  npsEl.className = 'delta-val ' + (cur.nps >= 0 ? 'up' : 'down');
+
+  const npsPctEl = document.getElementById('mom-nps-pct');
+  if (npsDelta !== null) {
+    npsPctEl.textContent = (npsDelta >= 0 ? '▲ +' : '▼ ') + npsDelta + ' pts';
+    npsPctEl.className = 'delta-pct ' + (npsDelta >= 0 ? 'up-bg' : 'down-bg');
+  } else {
+    npsPctEl.textContent = '—'; npsPctEl.className = 'delta-pct flat-bg';
+  }
+  document.getElementById('mom-nps-sub').textContent = prevM ? `vs ${prevM}` : curM;
+
+  // Resp delta
+  const respDelta = prev ? cur.total - prev.total : null;
+  const respEl = document.getElementById('mom-resp');
+  respEl.textContent = cur.total;
+  respEl.className = 'delta-val';
+  const respPctEl = document.getElementById('mom-resp-pct');
+  if (respDelta !== null) {
+    const pct = prev.total ? Math.round((respDelta/prev.total)*100) : 0;
+    respPctEl.textContent = (respDelta >= 0 ? '▲ +' : '▼ ') + respDelta + ' (' + (respDelta>=0?'+':'') + pct + '%)';
+    respPctEl.className = 'delta-pct ' + (respDelta >= 0 ? 'up-bg' : 'down-bg');
+  } else { respPctEl.textContent='—'; respPctEl.className='delta-pct flat-bg'; }
+
+  document.getElementById('mom-prom').textContent = cur.promoters + (prev ? ` (${prev.promoters > 0 ? (cur.promoters>=prev.promoters?'▲':'▼') : ''}${prev.promoters > 0 ? Math.abs(cur.promoters-prev.promoters) : ''})` : '');
+  document.getElementById('mom-pass').textContent = cur.passives + (prev ? ` (${prev.passives > 0 ? (cur.passives>=prev.passives?'▲':'▼') : ''}${prev.passives > 0 ? Math.abs(cur.passives-prev.passives) : ''})` : '');
+  document.getElementById('mom-detr').textContent = cur.detractors + (prev ? ` (${prev.detractors > 0 ? (cur.detractors>=prev.detractors?'▲':'▼') : ''}${prev.detractors > 0 ? Math.abs(cur.detractors-prev.detractors) : ''})` : '');
+
+  // Stacked bar — last 6 months
+  const last6 = months.slice(-6);
+  const labels = last6;
+  const proms = last6.map(m => calcNPS(map[m]).promoters);
+  const passs = last6.map(m => calcNPS(map[m]).passives);
+  const detrs = last6.map(m => calcNPS(map[m]).detractors);
+
+  if (charts.stacked) { charts.stacked.destroy(); }
+  const ctx = document.getElementById('chart-stacked').getContext('2d');
+  charts.stacked = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Promoters', data: proms, backgroundColor: '#22c55e', stack: 's' },
+        { label: 'Passives',  data: passs, backgroundColor: '#f59e0b', stack: 's' },
+        { label: 'Detractors',data: detrs, backgroundColor: '#ef4444', stack: 's' },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } } } },
+      scales: {
+        x: { stacked: true, ticks: { color: '#64748b' }, grid: { color: 'rgba(255,255,255,0.04)' } },
+        y: { stacked: true, ticks: { color: '#64748b' }, grid: { color: 'rgba(255,255,255,0.04)' } }
+      }
+    }
+  });
+}
+
+function renderYTD() {
+  const thisYear = new Date().getFullYear().toString();
+  const ytdRows = FILTERED.filter(d => d.response_date && d.response_date.startsWith(thisYear));
+  const s = calcNPS(ytdRows);
+
+  if (charts.donut) charts.donut.destroy();
+  const ctx = document.getElementById('chart-donut').getContext('2d');
+  charts.donut = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Promoters','Passives','Detractors'],
+      datasets: [{
+        data: [s.promoters, s.passives, s.detractors],
+        backgroundColor: ['#22c55e','#f59e0b','#ef4444'],
+        borderWidth: 2,
+        borderColor: '#0d1e30',
+        hoverOffset: 4
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      cutout: '68%',
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.raw}` } }
+      }
+    }
+  });
+
+  const legend = document.getElementById('ytd-legend');
+  const total = s.total || 1;
+  legend.innerHTML = [
+    { label: 'Promoters', val: s.promoters, color: '#22c55e' },
+    { label: 'Passives',  val: s.passives,  color: '#f59e0b' },
+    { label: 'Detractors',val: s.detractors,color: '#ef4444' },
+  ].map(item => `
+    <div class="legend-item">
+      <div class="legend-dot" style="background:${item.color}"></div>
+      <span class="legend-label">${item.label}</span>
+      <span class="legend-val" style="color:${item.color}">${item.val} <span style="color:var(--text-muted);font-weight:400;font-size:11px;">(${Math.round(item.val/total*100)}%)</span></span>
+    </div>
+  `).join('') + `<div style="margin-top:8px;font-size:12px;color:var(--text-muted);">YTD NPS: <strong style="color:var(--accent)">${s.nps !== null ? fmtNPS(s.nps) : '—'}</strong></div>`;
+}
+
+function renderTrends() {
+  const { map, months } = getMonthlyData();
+  const tbody = document.getElementById('trends-body');
+  tbody.innerHTML = months.map(m => {
+    const s = calcNPS(map[m]);
+    const npsVal = s.nps !== null ? fmtNPS(s.nps) : '—';
+    const cls = npsClass(s.nps);
+    return `<tr>
+      <td>${m}</td>
+      <td>${s.total}</td>
+      <td class="${cls}">${npsVal}</td>
+      <td style="color:var(--red)">${s.detractors}</td>
+      <td style="color:var(--amber)">${s.passives}</td>
+      <td style="color:var(--green)">${s.promoters}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderTopics() {
+  // Group by main_topic
+  const topicMap = {};
+  FILTERED.forEach(d => {
+    const t = d.main_topic || 'unknown';
+    if (!topicMap[t]) topicMap[t] = [];
+    topicMap[t].push(d);
+  });
+
+  // Get previous month data for MoM
+  const { map, months } = getMonthlyData();
+  const curM = months.length ? months[months.length-1] : null;
+  const prevM = months.length >= 2 ? months[months.length-2] : null;
+
+  const topics = Object.entries(topicMap).sort((a,b) => b[1].length - a[1].length);
+  const container = document.getElementById('topics-list');
+
+  container.innerHTML = topics.map(([topic, rows], idx) => {
+    const neg = rows.filter(d => d.sentiment_polarity === 'negative').length;
+    const neu = rows.filter(d => d.sentiment_polarity === 'neutral').length;
+    const pos = rows.filter(d => d.sentiment_polarity === 'positive').length;
+    const total = rows.length;
+
+    // MoM count
+    let momBadge = '';
+    if (curM && prevM && map[curM] && map[prevM]) {
+      const curCount = map[curM].filter(d=>(d.main_topic||'unknown')===topic).length;
+      const prevCount = map[prevM].filter(d=>(d.main_topic||'unknown')===topic).length;
+      const delta = curCount - prevCount;
+      const pct = prevCount ? Math.round(delta/prevCount*100) : null;
+      const cls = delta > 0 ? 'up-bg' : delta < 0 ? 'down-bg' : 'flat-bg';
+      momBadge = `<span class="mom-badge ${cls}">${delta>=0?'▲':'▼'} ${Math.abs(delta)}${pct!==null ? ` (${delta>=0?'+':''}${pct}%)` : ''}</span>`;
+    }
+
+    const negW = total ? Math.round(neg/total*100) : 0;
+    const neuW = total ? Math.round(neu/total*100) : 0;
+    const posW = total ? 100-negW-neuW : 0;
+
+    const topicLabel = (topic).replace(/_/g,' ');
+
+    const feedbackRows = rows.slice(0, 20).map(d => `
+      <div class="feedback-row">
+        <span class="feedback-meta">${d.cohort_date||'—'}</span>
+        <span class="feedback-meta">${d.source||'—'}</span>
+        <span class="feedback-meta">${d.tariff||'—'}</span>
+        <span class="feedback-meta">${d.segment||'—'}</span>
+        <span>${scoreEl(d._score, d._cat)}</span>
+        <span class="feedback-text">${escHtml(d.feedback_text||'—')}</span>
+      </div>
+    `).join('');
+
+    return `
+    <div class="topic-item" id="topic-${idx}">
+      <div class="topic-header" onclick="toggleTopic(${idx})">
+        <span class="topic-name">${topicLabel}</span>
+        <span class="topic-count">${total} mentions</span>
+        <div class="sentiment-bar">
+          <div class="s-neg" style="width:${negW}%"></div>
+          <div class="s-neu" style="width:${neuW}%"></div>
+          <div class="s-pos" style="width:${posW}%"></div>
+        </div>
+        <span style="font-size:11px;color:var(--text-muted)">neg ${negW}% neu ${neuW}% pos ${posW}%</span>
+        ${momBadge}
+        <span class="chevron" id="chev-${idx}">▶</span>
+      </div>
+      <div class="topic-rows" id="trows-${idx}">
+        <div class="feedback-row" style="background:var(--bg3);font-weight:600;">
+          <span class="feedback-meta">Cohort</span>
+          <span class="feedback-meta">Source</span>
+          <span class="feedback-meta">Tariff</span>
+          <span class="feedback-meta">Segment</span>
+          <span>Score</span>
+          <span>Feedback</span>
+        </div>
+        ${feedbackRows}
+        ${rows.length > 20 ? `<div style="padding:10px 16px;font-size:12px;color:var(--text-muted);">… ${rows.length-20} more in drill-down</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleTopic(idx) {
+  const rows = document.getElementById(`trows-${idx}`);
+  const chev = document.getElementById(`chev-${idx}`);
+  rows.classList.toggle('open');
+  chev.classList.toggle('open');
+}
+
+function scoreEl(score, cat) {
+  if (score === null) return `<span class="score-badge score-amber">${cat||'?'}</span>`;
+  const cls = score >= 9 ? 'score-green' : score >= 7 ? 'score-amber' : 'score-red';
+  return `<span class="score-badge ${cls}">${score}</span>`;
+}
+
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function renderDrilldown() {
+  const query = (document.getElementById('search-input').value || '').toLowerCase();
+  let rows = FILTERED;
+  if (query) {
+    rows = rows.filter(d =>
+      (d.feedback_text||'').toLowerCase().includes(query) ||
+      (d.project_id||'').toLowerCase().includes(query) ||
+      (d.segment||'').toLowerCase().includes(query) ||
+      (d.tariff||'').toLowerCase().includes(query) ||
+      (d.source||'').toLowerCase().includes(query) ||
+      (d.main_topic||'').toLowerCase().includes(query)
+    );
+  }
+  const shown = rows.slice(0, 50);
+  const tbody = document.getElementById('drill-body');
+  tbody.innerHTML = shown.map(d => `
+    <tr>
+      <td>${d.cohort_date||'—'}</td>
+      <td>${d.response_date||'—'}</td>
+      <td>${d.project_id||'—'}</td>
+      <td>${d.tariff||'—'}</td>
+      <td>${d.segment||'—'}</td>
+      <td>${scoreEl(d._score, d._cat)}</td>
+      <td>${d.source||'—'}</td>
+      <td class="drill-text">${escHtml(d.feedback_text||'—')}</td>
+    </tr>
+  `).join('');
+  document.getElementById('drill-count').textContent = `Showing ${shown.length} of ${rows.length} matching rows`;
+}
+
+// ── WIRE FILTERS ─────────────────────────────────────────────────────────
+['f-source','f-project','f-tariff','f-segment','f-month','f-date-from','f-date-to'].forEach(id => {
+  document.getElementById(id).addEventListener('change', applyFilters);
+});
+
+// ── BOOT ─────────────────────────────────────────────────────────────────
+fetchData();
+</script>
+</body>
+</html>
