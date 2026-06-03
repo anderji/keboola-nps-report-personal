@@ -694,17 +694,21 @@ async function fetchData() {
     const r = await fetch('/api/data');
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     RAW = await r.json();
-    // Normalise numeric score
+    // Normalise all fields — coerce to string to prevent crashes
+    const STR_FIELDS = ['source','internal_project','tariff','segment','month',
+                        'nps_category','main_topic','topic_label','subtopic',
+                        'sentiment_polarity','feedback_text','project_id',
+                        'cohort_date','response_date'];
     RAW.forEach(d => {
+      STR_FIELDS.forEach(f => { d[f] = d[f] == null ? '' : String(d[f]); });
       d._score = parseInt(d.score, 10);
       if (isNaN(d._score)) d._score = null;
-      // derived category
       if (d._score !== null) {
         if (d._score <= 6) d._cat = 'detractor';
         else if (d._score <= 8) d._cat = 'passive';
         else d._cat = 'promoter';
       } else {
-        d._cat = String(d.nps_category || '').toLowerCase();
+        d._cat = d.nps_category.toLowerCase();
       }
     });
     populateFilters();
@@ -824,7 +828,7 @@ function renderOverview() {
   const avg = scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1) : '—';
   document.getElementById('avg-score').textContent = avg;
 
-  const withText = FILTERED.filter(d => d.feedback_text && d.feedback_text.trim().length > 1).length;
+  const withText = FILTERED.filter(d => String(d.feedback_text || '').trim().length > 1).length;
   const rate = s.total ? Math.round((withText / s.total) * 100) + '%' : '—';
   document.getElementById('text-rate').textContent = rate;
 
@@ -1093,12 +1097,12 @@ function renderDrilldown() {
   let rows = FILTERED;
   if (query) {
     rows = rows.filter(d =>
-      (d.feedback_text||'').toLowerCase().includes(query) ||
-      (d.project_id||'').toLowerCase().includes(query) ||
-      (d.segment||'').toLowerCase().includes(query) ||
-      (d.tariff||'').toLowerCase().includes(query) ||
-      (d.source||'').toLowerCase().includes(query) ||
-      (d.main_topic||'').toLowerCase().includes(query)
+      String(d.feedback_text||'').toLowerCase().includes(query) ||
+      String(d.project_id||'').toLowerCase().includes(query) ||
+      String(d.segment||'').toLowerCase().includes(query) ||
+      String(d.tariff||'').toLowerCase().includes(query) ||
+      String(d.source||'').toLowerCase().includes(query) ||
+      String(d.main_topic||'').toLowerCase().includes(query)
     );
   }
   const shown = rows.slice(0, 50);
