@@ -1,66 +1,68 @@
 import os
 import csv
 import io
-import json
+import logging
 import requests
-from flask import Flask, jsonify, send_from_directory, request
+from flask import Flask, jsonify, send_from_directory
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# Debug: Print all env vars starting with relevant prefixes
-print("[DEBUG] Environment variables:")
-for key in sorted(os.environ.keys()):
-    if any(x in key.upper() for x in ['TOKEN', 'KBC', 'STORAGE', 'WORKSPACE']):
-        print(f"  {key} = {'***' if 'TOKEN' in key.upper() else os.environ[key]}")
-
+# Keboola injects #STORAGE_TOKEN as STORAGE_TOKEN env var
 KBC_TOKEN = os.environ.get("STORAGE_TOKEN", "")
-print(f"[DEBUG] STORAGE_TOKEN loaded: {'Yes' if KBC_TOKEN else 'No (empty)'}")
+KBC_URL   = os.environ.get("KBC_URL", "https://connection.europe-west3.gcp.keboola.com")
+TABLE_ID  = "in.c-dataaps-test.nps_text_feedback"
 
-KBC_URL = os.environ.get("KBC_URL", "https://connection.europe-west3.gcp.keboola.com")
-TABLE_ID = "in.c-dataaps-test.nps_text_feedback"
+logger.info(f"KBC_URL: {KBC_URL}")
+logger.info(f"STORAGE_TOKEN present: {'Yes' if KBC_TOKEN else 'No'}")
 
 _data_cache = []
 
 def load_data():
     global _data_cache
+    if not KBC_TOKEN:
+        logger.error("STORAGE_TOKEN is empty — cannot load data")
+        return False
+
+    url = f"{KBC_URL.rstrip('/')}/v2/storage/tables/{TABLE_ID}/data-preview"
+    headers = {"X-StorageApi-Token": KBC_TOKEN}
+
+    # Try JSON format first
     try:
-        url = f"{KBC_URL.rstrip('/')}/v2/storage/tables/{TABLE_ID}/data-preview"
-        headers = {"X-StorageApi-Token": KBC_TOKEN}
-        params = {"format": "json", "limit": 10000}
-        resp = requests.get(url, headers=headers, params=params, timeout=60)
+        logger.info(f"Fetching: {url}")
+        resp = requests.get(url, headers=headers, params={"format": "json", "limit": 10000}, timeout=60)
+        logger.info(f"Response status: {resp.status_code}")
         if resp.status_code == 200:
             payload = resp.json()
             columns = payload.get("columns", [])
-            rows = payload.get("rows", [])
-            _data_cache = []
-            for row in rows:
-                record = {}
-                for i, col in enumerate(columns):
-                    record[col] = row[i] if i < len(row) else None
-                _data_cache.append(record)
-            print(f"[INFO] Loaded {len(_data_cache)} rows from Keboola")
+            rows    = payload.get("rows", [])
+            _data_cache = [{col: (row[i] if i < len(row) else None) for i, col in enumerate(columns)} for row in rows]
+            logger.info(f"Loaded {len(_data_cache)} rows (JSON)")
             return True
         else:
-            # Try export endpoint
-            url2 = f"{KBC_URL.rstrip('/')}/v2/storage/tables/{TABLE_ID}/export-async"
-            resp2 = requests.post(url2, headers=headers, timeout=60)
-            raise Exception(f"Preview failed {resp.status_code}, export async: {resp2.status_code}")
+            logger.error(f"JSON preview failed: {resp.status_code} — {resp.text[:300]}")
     except Exception as e:
-        print(f"[ERROR] load_data: {e}")
-        # Try CSV export
-        try:
-            url3 = f"{KBC_URL.rstrip('/')}/v2/storage/tables/{TABLE_ID}/data-preview?format=rfc&limit=10000"
-            resp3 = requests.get(url3, headers={"X-StorageApi-Token": KBC_TOKEN}, timeout=60)
-            if resp3.status_code == 200:
-                reader = csv.DictReader(io.StringIO(resp3.text))
-                _data_cache = [row for row in reader]
-                print(f"[INFO] Loaded {len(_data_cache)} rows (CSV fallback)")
-                return True
-        except Exception as e2:
-            print(f"[ERROR] CSV fallback: {e2}")
-        return False
+        logger.error(f"JSON fetch error: {e}")
 
-# Load on startup
+    # Fallback: CSV format
+    try:
+        logger.info("Trying CSV fallback...")
+        resp2 = requests.get(url, headers=headers, params={"format": "rfc", "limit": 10000}, timeout=60)
+        logger.info(f"CSV response status: {resp2.status_code}")
+        if resp2.status_code == 200:
+            reader = csv.DictReader(io.StringIO(resp2.text))
+            _data_cache = list(reader)
+            logger.info(f"Loaded {len(_data_cache)} rows (CSV)")
+            return True
+        else:
+            logger.error(f"CSV preview failed: {resp2.status_code} — {resp2.text[:300]}")
+    except Exception as e2:
+        logger.error(f"CSV fetch error: {e2}")
+
+    return False
+
 load_data()
 
 @app.route("/", methods=["GET", "POST"])
@@ -71,11 +73,23 @@ def index():
 def get_data():
     return jsonify(_data_cache)
 
+@app.route("/api/debug", methods=["GET"])
+def debug():
+    env_info = {k: ("***" if "TOKEN" in k.upper() else v)
+                for k, v in os.environ.items()
+                if any(x in k.upper() for x in ["TOKEN","KBC","STORAGE","WORKSPACE","BRANCH"])}
+    return jsonify({
+        "row_count":    len(_data_cache),
+        "token_present": bool(KBC_TOKEN),
+        "kbc_url":      KBC_URL,
+        "env_vars":     env_info,
+        "sample_row":   _data_cache[0] if _data_cache else None,
+    })
+
 @app.route("/api/reload", methods=["POST"])
 def reload_data():
     success = load_data()
     return jsonify({"success": success, "count": len(_data_cache)})
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False)
