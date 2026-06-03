@@ -7,7 +7,15 @@ from flask import Flask, jsonify, send_from_directory, request
 
 app = Flask(__name__)
 
+# Debug: Print all env vars starting with relevant prefixes
+print("[DEBUG] Environment variables:")
+for key in sorted(os.environ.keys()):
+    if any(x in key.upper() for x in ['TOKEN', 'KBC', 'STORAGE', 'WORKSPACE']):
+        print(f"  {key} = {'***' if 'TOKEN' in key.upper() else os.environ[key]}")
+
 KBC_TOKEN = os.environ.get("STORAGE_TOKEN", "")
+print(f"[DEBUG] STORAGE_TOKEN loaded: {'Yes' if KBC_TOKEN else 'No (empty)'}")
+
 KBC_URL = os.environ.get("KBC_URL", "https://connection.europe-west3.gcp.keboola.com")
 TABLE_ID = "in.c-dataaps-test.nps_text_feedback"
 
