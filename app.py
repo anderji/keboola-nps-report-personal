@@ -26,39 +26,39 @@ def load_data():
         return False
 
     headers = {"X-StorageApi-Token": KBC_TOKEN}
-    all_rows = []
-    offset = 0
-    limit = 1000
+    url = f"{KBC_URL.rstrip('/')}/v2/storage/tables/{TABLE_ID}/data-preview"
 
-    while True:
-        url = f"{KBC_URL.rstrip('/')}/v2/storage/tables/{TABLE_ID}/data-preview"
-        params = {"format": "json", "limit": limit, "offset": offset}
-        try:
-            logger.info(f"Fetching rows {offset}–{offset+limit}...")
-            resp = requests.get(url, headers=headers, params=params, timeout=60)
-            logger.info(f"Status: {resp.status_code}")
-            if resp.status_code != 200:
-                logger.error(f"Failed: {resp.text[:300]}")
-                break
+    # JSON format, max 1000 rows (no offset supported)
+    try:
+        logger.info(f"Fetching data-preview (JSON, limit=1000)...")
+        resp = requests.get(url, headers=headers, params={"format": "json", "limit": 1000}, timeout=60)
+        logger.info(f"Status: {resp.status_code}")
+        if resp.status_code == 200:
             payload = resp.json()
             columns = payload.get("columns", [])
             rows    = payload.get("rows", [])
-            if not rows:
-                logger.info("No more rows, done.")
-                break
-            for row in rows:
-                all_rows.append({col: (row[i] if i < len(row) else None) for i, col in enumerate(columns)})
-            logger.info(f"Got {len(rows)} rows, total so far: {len(all_rows)}")
-            if len(rows) < limit:
-                break
-            offset += limit
-        except Exception as e:
-            logger.error(f"Fetch error: {e}")
-            break
+            _data_cache = [{col: (row[i] if i < len(row) else None) for i, col in enumerate(columns)} for row in rows]
+            logger.info(f"Loaded {len(_data_cache)} rows")
+            return True
+        logger.error(f"JSON failed: {resp.text[:300]}")
+    except Exception as e:
+        logger.error(f"JSON error: {e}")
 
-    _data_cache = all_rows
-    logger.info(f"Total loaded: {len(_data_cache)} rows")
-    return len(_data_cache) > 0
+    # CSV fallback
+    try:
+        logger.info("Trying CSV fallback (limit=1000)...")
+        resp2 = requests.get(url, headers=headers, params={"format": "rfc", "limit": 1000}, timeout=60)
+        logger.info(f"CSV status: {resp2.status_code}")
+        if resp2.status_code == 200:
+            reader = csv.DictReader(io.StringIO(resp2.text))
+            _data_cache = list(reader)
+            logger.info(f"Loaded {len(_data_cache)} rows (CSV)")
+            return True
+        logger.error(f"CSV failed: {resp2.text[:300]}")
+    except Exception as e2:
+        logger.error(f"CSV error: {e2}")
+
+    return False
 
 load_data()
 
